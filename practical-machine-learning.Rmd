@@ -1,0 +1,107 @@
+---
+title: "practical machine learning"
+author: "Xavier Chapelant"
+date: "23 mars 2019"
+output:
+  html_document:
+    df_print: paged
+---
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+Our goal is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. This report describe how we built our model, how we used cross validation, the expected out of sample error, and why we made the choices we did. We will also use our prediction model to predict 20 different test cases. 
+
+## selection of the data.
+The dataset contains 160 columns. The last one is the one we shall predict.
+We will disregard the columns 1 to 7, because they are not relevant for the prediction
+We will also remove other columns because they are containing two few data: 12-36,50-59,69-83,87-101,103-112,125-139,141-150
+
+```{r setup}
+
+library(caret)
+
+pml_training=read.csv("C:/R/practical-machine-learning/pml-training.csv",header=TRUE)
+pml_training_subset=pml_training[,c(8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+
+```
+
+## Building data sets for training and cross validation. 
+
+Around 60% of the data is used for the training and 40% for Cross Validation.
+
+```{r}
+trainIndex <- createDataPartition(y = pml_training_subset$classe, p=0.6,list=FALSE)
+
+trainSet <- pml_training_subset[trainIndex,]
+
+crossValidationSet <- pml_training_subset[-trainIndex,]
+
+```
+
+
+##Selection of the model
+
+#1-Classification tree
+```{r}
+
+library(rpart)
+
+# Setting the seed
+set.seed(11567)
+
+classification_tree_model <- rpart(classe ~ ., data=trainSet, method="class")
+
+library(rattle)
+fancyRpartPlot(classification_tree_model)
+
+```
+
+
+Evaluation of the results  
+```{r}
+classification_tree_prediction <- predict(classification_tree_model, newdata=crossValidationSet,  type = "class")
+confusionMatrix(classification_tree_prediction, crossValidationSet$classe)
+```
+The classification rate of 0.73 is not high enough. We will try another method hoping for better results
+
+#2-Rain forest
+
+```{r}
+library(randomForest)
+
+mytrControl = trainControl(method = "cv", number = 4)
+
+modelFit <- train(classe ~.,data = trainSet, method="rf", trControl = mytrControl)
+
+modelFit
+
+```
+
+## Cross Validation
+
+```{r}
+
+predicted <- predict(modelFit, crossValidationSet)
+
+SampleError <- sum(predicted == crossValidationSet$classe)/nrow(crossValidationSet)
+
+```
+
+So the Out of Sample Error we get is: `r SampleError`
+
+This classification rate is much better and high enough for our needs. We will use the rain forest to predict the testset.
+
+
+## Testing on new data
+The new data comes from pml-testing.csv and is containing 20 rows for which we would like to guess the classe at a minimum rate of 0.8 to pass the test.
+Since the rain forest gave a very high classification rate we will use it.
+```{r}
+pml_testing=read.csv("C:/R/practical-machine-learning/pml-testing.csv",header=TRUE)
+pml_testing_subset=pml_testing[,c(8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+answers <-predict(modelFit, pml_testing_subset)
+
+answers
+
+```
+
+
